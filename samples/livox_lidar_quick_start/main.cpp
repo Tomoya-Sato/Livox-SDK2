@@ -38,24 +38,41 @@
 #include <thread>
 #include <chrono>
 #include <iostream>
+#include <fstream>
+
+std::ofstream ofs_;
 
 void PointCloudCallback(uint32_t handle, const uint8_t dev_type, LivoxLidarEthernetPacket* data, void* client_data) {
   if (data == nullptr) {
     return;
   }
-  printf("point cloud handle: %u, data_num: %d, data_type: %d, length: %d, frame_counter: %d\n",
-      handle, data->dot_num, data->data_type, data->length, data->frame_cnt);
+  // printf("point cloud handle: %u, data_num: %d, data_type: %d, length: %d, frame_counter: %d\n",
+  //     handle, data->dot_num, data->data_type, data->length, data->frame_cnt);
+
+  // Convert uint8_t array to timestamp
+  uint64_t timestamp = 0;
+  timestamp += (uint64_t)data->timestamp[0];
+  timestamp += (uint64_t)data->timestamp[1] << 8;
+  timestamp += (uint64_t)data->timestamp[2] << 16;
+  timestamp += (uint64_t)data->timestamp[3] << 24;
+  timestamp += (uint64_t)data->timestamp[4] << 32;
+  timestamp += (uint64_t)data->timestamp[5] << 40;
+  timestamp += (uint64_t)data->timestamp[6] << 48;
+  timestamp += (uint64_t)data->timestamp[7] << 56;
+  double d_stamp = timestamp / 1000000000.0;
+  printf("type: %d, timestamp: %lf\n", data->time_type, d_stamp);
 
   if (data->data_type == kLivoxLidarCartesianCoordinateHighData) {
     LivoxLidarCartesianHighRawPoint *p_point_data = (LivoxLidarCartesianHighRawPoint *)data->data;
     for (uint32_t i = 0; i < data->dot_num; i++) {
-      //p_point_data[i].x;
-      //p_point_data[i].y;
-      //p_point_data[i].z;
+      ofs_ << p_point_data[i].x / 1000.0 << "," << p_point_data[i].y / 1000.0 << "," << p_point_data[i].z / 1000.0 << "\n";
     }
   }
   else if (data->data_type == kLivoxLidarCartesianCoordinateLowData) {
     LivoxLidarCartesianLowRawPoint *p_point_data = (LivoxLidarCartesianLowRawPoint *)data->data;
+    for (uint32_t i = 0; i < data->dot_num; i++) {
+      ofs_ << p_point_data[i].x / 1000.0 << "," << p_point_data[i].y << "," << p_point_data[i].z << "\n";
+    }
   } else if (data->data_type == kLivoxLidarSphericalCoordinateData) {
     LivoxLidarSpherPoint* p_point_data = (LivoxLidarSpherPoint *)data->data;
   }
@@ -65,8 +82,8 @@ void ImuDataCallback(uint32_t handle, const uint8_t dev_type,  LivoxLidarEtherne
   if (data == nullptr) {
     return;
   } 
-  printf("Imu data callback handle:%u, data_num:%u, data_type:%u, length:%u, frame_counter:%u.\n",
-      handle, data->dot_num, data->data_type, data->length, data->frame_cnt);
+  // printf("Imu data callback handle:%u, data_num:%u, data_type:%u, length:%u, frame_counter:%u.\n",
+  //     handle, data->dot_num, data->data_type, data->length, data->frame_cnt);
 }
 
 // void OnLidarSetIpCallback(livox_vehicle_status status, uint32_t handle, uint8_t ret_code, void*) {
@@ -173,8 +190,8 @@ void LidarInfoChangeCallback(const uint32_t handle, const LivoxLidarInfo* info, 
 void LivoxLidarPushMsgCallback(const uint32_t handle, const uint8_t dev_type, const char* info, void* client_data) {
   struct in_addr tmp_addr;
   tmp_addr.s_addr = handle;  
-  std::cout << "handle: " << handle << ", ip: " << inet_ntoa(tmp_addr) << ", push msg info: " << std::endl;
-  std::cout << info << std::endl;
+  // std::cout << "handle: " << handle << ", ip: " << inet_ntoa(tmp_addr) << ", push msg info: " << std::endl;
+  // std::cout << info << std::endl;
   return;
 }
 
@@ -191,6 +208,8 @@ int main(int argc, const char *argv[]) {
     LivoxLidarSdkUninit();
     return -1;
   }
+
+  ofs_.open("data.xyz");
   
   // REQUIRED, to get point cloud data via 'PointCloudCallback'
   SetLivoxLidarPointCloudCallBack(PointCloudCallback, nullptr);
@@ -199,7 +218,7 @@ int main(int argc, const char *argv[]) {
   // some lidar types DO NOT contain an imu component
   SetLivoxLidarImuDataCallback(ImuDataCallback, nullptr);
   
-  SetLivoxLidarInfoCallback(LivoxLidarPushMsgCallback, nullptr);
+  // SetLivoxLidarInfoCallback(LivoxLidarPushMsgCallback, nullptr);
   
   // REQUIRED, to get a handle to targeted lidar and set its work mode to NORMAL
   SetLivoxLidarInfoChangeCallback(LidarInfoChangeCallback, nullptr);
