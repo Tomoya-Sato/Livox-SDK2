@@ -39,8 +39,17 @@
 #include <chrono>
 #include <iostream>
 #include <fstream>
+#include <iomanip>
+
+#pragma pack(1)
 
 std::ofstream ofs_;
+
+typedef struct {
+  uint16_t dot_num;
+  uint8_t data_type;
+  double stamp;
+} CompactHeader;
 
 double convertTimestamp(uint8_t* data) {
   uint64_t timestamp = 0;
@@ -62,26 +71,22 @@ void PointCloudCallback(uint32_t handle, const uint8_t dev_type, LivoxLidarEther
   // printf("point cloud handle: %u, data_num: %d, data_type: %d, length: %d, frame_counter: %d\n",
   //     handle, data->dot_num, data->data_type, data->length, data->frame_cnt);
 
-  // Convert uint8_t array to timestamp
-  double stamp = convertTimestamp(data->timestamp);
-  printf("type: %d, timestamp: %lf\n", data->time_type, stamp);
+  CompactHeader header;
+  header.dot_num = data->dot_num;
+  header.data_type = data->data_type;
+  header.stamp = convertTimestamp(data->timestamp);
+  std::cout << header.stamp << std::endl;
 
   // Write packet data to file
-  ofs_.write(reinterpret_cast<char*>(data), sizeof(LivoxLidarEthernetPacket));
+  ofs_.write(reinterpret_cast<char*>(&header), sizeof(header));
 
   if (data->data_type == kLivoxLidarCartesianCoordinateHighData) {
     LivoxLidarCartesianHighRawPoint *p_point_data = (LivoxLidarCartesianHighRawPoint *)data->data;
     ofs_.write(reinterpret_cast<char*>(p_point_data), sizeof(LivoxLidarCartesianHighRawPoint) * data->dot_num);
-    // for (uint32_t i = 0; i < data->dot_num; i++) {
-    //   ofs_ << p_point_data[i].x / 1000.0 << "," << p_point_data[i].y / 1000.0 << "," << p_point_data[i].z / 1000.0 << "\n";
-    // }
   }
   else if (data->data_type == kLivoxLidarCartesianCoordinateLowData) {
     LivoxLidarCartesianLowRawPoint *p_point_data = (LivoxLidarCartesianLowRawPoint *)data->data;
     ofs_.write(reinterpret_cast<char*>(p_point_data), sizeof(LivoxLidarCartesianLowRawPoint) * data->dot_num);
-    // for (uint32_t i = 0; i < data->dot_num; i++) {
-    //   ofs_ << p_point_data[i].x / 1000.0 << "," << p_point_data[i].y << "," << p_point_data[i].z << "\n";
-    // }
   } else if (data->data_type == kLivoxLidarSphericalCoordinateData) {
     LivoxLidarSpherPoint* p_point_data = (LivoxLidarSpherPoint *)data->data;
   }
@@ -92,11 +97,13 @@ void ImuDataCallback(uint32_t handle, const uint8_t dev_type,  LivoxLidarEtherne
     return;
   }
 
-  double stamp = convertTimestamp(data->timestamp);
-  printf("type: %d, timestamp: %lf\n", data->time_type, stamp);
+  CompactHeader header;
+  header.dot_num = data->dot_num;
+  header.data_type = data->data_type;
+  header.stamp = convertTimestamp(data->timestamp);
 
   // Write packet data to file
-  ofs_.write(reinterpret_cast<char*>(data), sizeof(LivoxLidarEthernetPacket));
+  ofs_.write(reinterpret_cast<char*>(&header), sizeof(header));
 
   if (data->data_type == kLivoxLidarImuData) {
     LivoxLidarImuRawPoint* p_imu_data = (LivoxLidarImuRawPoint *)data->data;
@@ -217,7 +224,7 @@ void LivoxLidarPushMsgCallback(const uint32_t handle, const uint8_t dev_type, co
 }
 
 int main(int argc, const char *argv[]) {
-  if (argc != 2) {
+  if (argc != 3) {
     printf("Params Invalid, must input config path.\n");
     return -1;
   }
